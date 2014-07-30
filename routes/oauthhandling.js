@@ -1,10 +1,13 @@
 var express = require('express');
-var http = require('https');
+var http = require('http');
 var router = express.Router();
+var config = require('../config.js');
 
 router.get('/', function(req, res) {
+	console.log('serve / '+ req.query.code);
 	if(req.query.code) {
 		resolveTokens(req.query.code, function(tokens) {
+			console.log('tokens: '+ tokens);
 			makeDemoAPICall(tokens.access_token, function(accountInfo) {
 				res.render('oauth_success', { token : tokens.access_token, accountInfo: accountInfo});
 			});
@@ -18,10 +21,11 @@ router.get('/', function(req, res) {
 
 function resolveTokens(code, callback) {
 	var reqOptions = {
-		hostname : 'api-apps-sandbox.tradeshift.com',
-		path: '/tradeshift/auth/token',
+		hostname : config.host,
+		port: config.port,
+		path: config.proxyRootPath + '/auth/token',
 		method: 'POST',
-		auth: 'AcmeCorp.DemoService:abc123',
+		auth: config.authId +':abc123',
 		headers: {
 			"Accept" : "application/json",
 			"Content-Type" : "application/x-www-form-urlencoded"
@@ -38,15 +42,19 @@ function resolveTokens(code, callback) {
 			callback(tokens);				
 		});
 	});
-	
+	clientReq.on('error', function(e) {
+			console.log(e);
+	  console.log('problem with resolveTokens: ' + e.message);
+	});
 	clientReq.write('grant_type=authorization_code&code=' + code);
 	clientReq.end();
 }
 
 function makeDemoAPICall(accessToken, callback) {
 	var reqOptions = {
-		hostname : 'api-apps-sandbox.tradeshift.com',
-		path: '/tradeshift/rest/external/account/info',
+		hostname : config.host,
+		port: config.port,
+		path: config.proxyRootPath + '/rest/external/account/info',
 		headers: {
 			"Accept" : "application/json",
 			"Authorization" : "Bearer " + accessToken
@@ -55,11 +63,15 @@ function makeDemoAPICall(accessToken, callback) {
 
 	http.get(reqOptions, function(res) {
 		res.on('data', function(data) {
+			console.log('makeDemoAPICall response: '+ data);
 			var accountInfo = JSON.parse(data);
 			console.log("API response: " + accountInfo.CompanyName);
 			callback(accountInfo);
 		});
-	});
+	}).on('error', function(e) {
+			console.log(e);
+			console.log('problem with makeDemoAPICall: ' + e.message);
+	});;
 }
 
 module.exports = router;
